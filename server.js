@@ -1,3 +1,4 @@
+// Added comment for lab 6 - server.js
 require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
