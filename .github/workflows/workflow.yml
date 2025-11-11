@@ -1,11 +1,13 @@
-name: auth-workflow.yml
+name: Auth API CI
 
 on:
   push:
     branches:
-      - 'main'
+      - main
     paths:
-      - '**.js'
+      - '**/*.js'
+      - '**/*.yml'
+  pull_request:
 
 jobs:
   test:
@@ -24,18 +26,38 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Use Node.js 24
-        uses: actions/setup-node@v3
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 20 # Node 24 is not LTS yet and may cause Jest hangs
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
-      - name: Start app
-        run: npm start &
+      - name: Create .env file
+        run: |
+          echo "PORT=8000" >> .env
+          echo "MONGO_URI=mongodb://localhost:27017/testdb" >> .env
+          echo "JWT_SECRET=testsecret" >> .env
 
-      - name: Run tests
-        run: npm test
+      - name: Wait for MongoDB to be ready
+        run: |
+          for i in {1..15}; do
+            nc -z localhost 27017 && echo "MongoDB is up!" && exit 0
+            echo "Waiting for MongoDB... ($i)"
+            sleep 2
+          done
+          echo "MongoDB did not start in time." && exit 1
+
+      - name: Run Jest tests
+        env:
+          NODE_ENV: test
+        run: |
+          npx jest --runInBand --detectOpenHandles --forceExit
+
+      - name: Stop all background processes
+        if: always()
+        run: |
+          kill $(jobs -p) || true
